@@ -22,11 +22,11 @@ def analyze_sharepoint():
   sharepoint_application_name = 'TRD077-BuscadorCognitivo-GCP-spo-api4'
   process_queue = 'process-sharepoint-4'
 
-  # check sites already proccessed for new files
+  # check sites/drives marked to be processed daily
   query = """
-          SELECT DISTINCT SD.site_name, SD.site_web_url 
-          FROM `rg-trd077-pro.configuration_details.stats_all_detail_summary` AS S JOIN `rg-trd077-pro.configuration_details.sites_and_drives` AS SD ON S.site_name=SD.site_name 
-        """
+        SELECT DISTINCT *
+        FROM `rg-trd077-pro.configuration_details.daily_update`
+      """
 
   try:
     query_job = client_bigquery.query(query)
@@ -36,20 +36,29 @@ def analyze_sharepoint():
     return "ERROR IN SQL QUERY", 200
   
   # get query results in the correct format
-  rows = [dict(row) for row in query_result]
-  sites_list=[]
-  for i in rows:
-    sites_list.append({'site_name':i['site_name'], 'site_id_short': i['site_web_url'].split("/")[-1]})
+  sites_list = [dict(row) for row in query_result]
 
 
 
   for site in sites_list:
-    site['sharepoint_application_name'] = sharepoint_application_name
-    site['process-queue'] = process_queue
+    #Build task object
+    task_object={}
+    if site['drive_name']:
+      task_object['site_name'] = site['site_name']
+      task_object['site_id_short'] = site['site_id_short']
+      task_object['drive_name'] = site['drive_name']
+      print('Launched site with site_id_short: '  + site['site_id_short'] + ' and drive_name: ' + site['drive_name'])
+    else:
+      task_object['site_name'] = site['site_name']
+      task_object['site_id_short'] = site['site_id_short']
+      print('Launched site with site_id_short: '  + site['site_id_short'])
 
-    launch_task(project_id, analyze_url, queue_name_analyze, queue_region, site, service_account)
-    print('Launched site with site_id_short: '  + site['site_id_short'])
+    # add quee details to task object
+    task_object['sharepoint_application_name'] = sharepoint_application_name
+    task_object['process-queue'] = process_queue
 
+    launch_task(project_id, analyze_url, queue_name_analyze, queue_region, task_object, service_account)
+    
   print('End of process')
 
 
