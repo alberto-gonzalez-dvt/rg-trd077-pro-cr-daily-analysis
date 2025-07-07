@@ -22,11 +22,22 @@ def analyze_sharepoint():
   sharepoint_application_name = 'TRD077-BuscadorCognitivo-GCP-spo-api4'
   process_queue = 'process-sharepoint-4'
 
-  # check sites/drives marked to be processed daily
-  query = """
-        SELECT DISTINCT *
-        FROM `rg-trd077-pro.configuration_details.daily_update`
-      """
+  # check sites/drives marked to be processed daily if their data ingest is finalized
+  query="""
+        SELECT DISTINCT t1.*
+        FROM `rg-trd077-pro.configuration_details.daily_update` AS t1
+              JOIN `rg-trd077-pro.configuration_details.stats_all_detail_summary` AS t2 
+              ON t1.site_name = t2.site_name
+        WHERE
+          t2.ejecucion_finalizada = 'Si'
+            AND NOT EXISTS (
+              -- Check that no record exists for the same name with 'No'
+              SELECT 1
+              FROM `rg-trd077-pro.configuration_details.stats_all_detail_summary` AS t2_check
+              WHERE t2_check.site_name = t1.site_name
+              AND t2_check.ejecucion_finalizada = 'No'
+            );
+    """
 
   try:
     query_job = client_bigquery.query(query)
